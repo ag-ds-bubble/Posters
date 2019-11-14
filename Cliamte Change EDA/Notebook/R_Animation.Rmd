@@ -1,0 +1,107 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+
+```{r}
+### Imports
+library(ggplot2)
+library(gganimate)
+library(tidyverse)
+library(dplyr)
+library(gifski)
+library(animation)
+library(wesanderson)
+```
+
+
+```{r setup}
+    ### Set the root working directory
+    p = "~/Desktop/Profile\ Bunker/Personal\ Profile/Posters/Climate\ Change\ and\ Endangered\ Species/"
+    knitr::opts_knit$set(root.dir = normalizePath(p)) 
+```
+
+
+```{r}
+
+## Load the data and process the data
+iucn_data <- read_csv("./Data/IUCN_DATA_melt.csv")
+colnames(iucn_data) <- c('a', 'b', 'c', 'd')
+
+iucn_formatted <- iucn_data %>% 
+  group_by(b) %>%
+    mutate(rank = order(order(d, b, decreasing=TRUE)),
+           Value_rel = d/d[rank==1.0],
+           Value_lbl = paste0(" ",round(d))
+           ) %>%
+  ungroup()
+
+iucn_formatted <- iucn_formatted %>%
+    mutate(c = recode(c, CR = "Critically Endangered", 
+                         EN = "Endangered", 
+                         EW = "Extinct In Wild", 
+                         EX = "Extinct",
+                         LC = "Least Concern",
+                         NT = "Near Threatened",
+                         VU = "Vulnerable"))
+
+iucn_formatted<-iucn_formatted[!(iucn_formatted$d<100.0),]
+
+## Create the static plots
+staticplot = ggplot(iucn_formatted, aes(rank, group = c, 
+                    fill = as.factor(c), color = as.factor(c)))+
+  geom_tile(aes(y = d/2,
+                height = d,
+                width = 0.9), alpha = 0.8, color = NA) +
+  geom_text(aes(y = 0, label = paste(c, " ")), vjust = 0.2, hjust = 1) +
+  geom_text(aes(y=d,label = Value_lbl, hjust=0)) +
+  coord_flip(clip = "off", expand = FALSE) +
+  scale_y_continuous(labels = scales::comma) +
+  scale_x_reverse() +
+  guides(color = FALSE, fill = FALSE) +
+  theme(axis.line=element_blank(),
+        axis.text.x=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        legend.position="none",
+        panel.background=element_blank(),
+        panel.border=element_blank(),
+        panel.grid.major=element_blank(),
+        panel.grid.minor=element_blank(),
+        panel.grid.major.x = element_line( size=.1, color="grey" ),
+        panel.grid.minor.x = element_line( size=.1, color="grey" ),
+        plot.title=element_text(size=25, hjust=0.5, face="bold", colour="grey", vjust=-1),
+        plot.subtitle=element_text(size=18, hjust=0.5, face="italic", color="grey"),
+        plot.caption =element_text(size=8, hjust=0.5, face="italic", color="grey"),
+        plot.background=element_blank(),
+        plot.margin = margin(2,2, 2, 4, "cm"))
+
+
+
+## Animate the plots so develoed
+anim = staticplot + transition_states(b, transition_length = 6, state_length = 1) +
+  view_follow(fixed_x = TRUE)  +
+  labs(title = 'Number of species assessed by IUCN grouped by the category : {closest_state}',
+       caption  = "These numbers include the change in the Status List as well | Data Source: https://github.com/ContentMine/canary/issues/6#issuecomment-152490410")
+
+animate(anim, 200, fps = 10,  width = 1200, height = 1000, 
+        renderer = gifski_renderer("gganim.gif"))
+
+animate(anim, 200, fps = 5,  width = 1200, height = 1000, 
+        renderer = ffmpeg_renderer()) -> for_mp4
+anim_save("animation.mp4", animation = for_mp4 )
+
+```
+
+
+
+
+
+
