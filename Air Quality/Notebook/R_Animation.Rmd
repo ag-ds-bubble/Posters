@@ -1,0 +1,128 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+
+```{r}
+### Imports
+library(ggplot2)
+library(gganimate)
+library(tidyverse)
+library(dplyr)
+library(gifski)
+library(animation)
+library(wesanderson)
+library(RColorBrewer)
+library(ggmap)
+library(maps)
+library(rgdal)
+library(scales)
+library(maptools)
+library(gridExtra)
+library(rgeos)
+```
+
+
+```{r setup}
+    ### Set the root working directory
+    p = "~/Desktop/Profile\ Bunker/Personal\ Profile/Posters/Air\ Quality/"
+    knitr::opts_knit$set(root.dir = normalizePath(p)) 
+```
+
+
+```{r}
+
+## Load the data and process the data
+animdata1 <- read_csv("./Data/Animation1_Data.csv")
+
+animdata_formatted <- animdata1 %>% 
+  group_by(Year) %>%
+    mutate(rank = order(order(Exposure_Mean, Year, decreasing=TRUE)),
+           Value_rel = Exposure_Mean/Exposure_Mean[rank==1.0],
+           Value_lbl = paste0(" ",round(Exposure_Mean))
+           ) %>%
+  group_by(Country) %>% 
+  filter(rank <=15) %>%
+  ungroup()
+
+
+## Create the static plots
+staticplot = ggplot(animdata_formatted, aes(rank, group = Country, 
+                    fill = as.factor(Country), color = as.factor(Country)))+
+  geom_tile(aes(y = Exposure_Mean/2,
+                height = Exposure_Mean,
+                width = 0.9), alpha = 0.8, color = NA) +
+  geom_text(aes(y = 0, label = paste(Country, " ")), size=10, vjust = 0.2, hjust = 1) +
+  geom_text(aes(y=Exposure_Mean,label = Value_lbl, hjust=0, size=8,)) +
+  coord_flip(clip = "off", expand = FALSE) +
+  scale_y_continuous(labels = scales::comma) +
+  scale_x_reverse() +
+  guides(color = FALSE, fill = FALSE) +
+  theme(axis.line=element_blank(),
+        axis.text.x=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        legend.position="none",
+        panel.background=element_blank(),
+        panel.border=element_blank(),
+        panel.grid.major=element_blank(),
+        panel.grid.minor=element_blank(),
+        panel.grid.major.x = element_line( size=.1, color="grey" ),
+        panel.grid.minor.x = element_line( size=.1, color="grey" ),
+        plot.title=element_text(size=45, hjust=0.5, face="bold", colour="black", vjust=1),
+        plot.subtitle=element_text(size=28, hjust=0.5, face="italic", color="grey"),
+        plot.caption =element_text(size=14, hjust=0.5, face="italic", color="grey"),
+        plot.background=element_blank(),
+        plot.margin = margin(2,2, 2 , 8, "cm"))
+
+
+## Animate the plots so develoed
+anim = staticplot + transition_states(Year, transition_length = 10, state_length = 5) +
+  view_follow(fixed_x = TRUE)  +
+  labs(title = 'Air Quality, Population weighted concentration : {closest_state}',
+       caption  = "These numbers reflect PM2.5 Pollutant density in (µg/m3) | Data Source: https://www.stateofglobalair.org")
+
+animate(anim, 300, fps = 3,  width = 1500, height = 1000, 
+        renderer = gifski_renderer("gganim1.gif"))
+
+animate(anim, 300, fps = 3,  width = 1500, height = 1000, 
+        renderer = ffmpeg_renderer()) -> for_mp4
+anim_save("animation1.mp4", animation = for_mp4 )
+
+```
+
+
+```{r}
+states_shape = readShapeSpatial("Notebook/IND_adm/IND_adm1.shp")
+class(states_shape)
+names(states_shape)
+print(states_shape$ID_1)
+print(states_shape$NAME_1)
+# plot(states_shape, main = "Administrative Map of India")
+```
+
+
+
+```{r}
+
+fortify_shape = fortify(states_shape, region = "ID_1")
+class(fortify_shape)
+mapData <- read_csv("./Data/mapData.csv")
+t <- filter(mapData, mapData$Year == 2015)
+Merged_data = merge(fortify_shape, t, by="id")
+Map_plot = Merged_data[order(Merged_data$order), ]
+ggplot() +
+  geom_polygon(data = Map_plot,
+           	aes(x = long, y = lat, group = group, fill = rspm),
+      	     color = "black", size = 0.5) +
+  coord_map()
+ggsave('a.jpg', plot = last_plot())
+```
+
